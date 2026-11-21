@@ -1,0 +1,44 @@
+spring:
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/floodguard}
+    username: ${DATABASE_USER:floodguard}
+    password: ${DATABASE_PASSWORD:floodguard}
+  sql:
+    init:
+      mode: always
+  jpa:
+    hibernate:
+      ddl-auto: none
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
+    username: ${SMTP_USER:}
+    password: ${SMTP_PASSWORD:}
+server:
+  forward-headers-strategy: framework
+management:
+  health:
+    mail:
+      enabled: false
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+floodguard:
+  worker-enabled: ${WORKER_ENABLED:false}
+  admin-username: ${ADMIN_USERNAME:admin}
+  admin-password: ${ADMIN_PASSWORD:}
+  phone-key: ${PHONE_ENCRYPTION_KEY:}
+  sms-enabled: ${SMS_ENABLED:false}
+  twilio-account-sid: ${TWILIO_ACCOUNT_SID:}
+  twilio-auth-token: ${TWILIO_AUTH_TOKEN:}
+  twilio-from: ${TWILIO_FROM:}
+  public-base-url: ${PUBLIC_BASE_URL:}
+  officer-email: ${OFFICER_EMAIL:}
+  admin-email: ${ADMIN_EMAIL:}
+  road-vulnerability-threshold: ${ROAD_VULNERABILITY_THRESHOLD:0.6}
+  ingest-on-startup: ${INGEST_ON_STARTUP:false}

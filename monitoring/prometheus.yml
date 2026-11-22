@@ -1,0 +1,11 @@
+global:
+  scrape_interval: 15s
+scrape_configs:
+  - job_name: floodguard
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['backend:8080']
+  - job_name: floodguard-worker
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['worker:8080']

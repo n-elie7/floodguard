@@ -36,6 +36,8 @@ public class AlertService {
     @Value("${floodguard.twilio-account-sid}") String sid;
     @Value("${floodguard.twilio-auth-token}") String token;
     @Value("${floodguard.twilio-from}") String from;
+    @Value("${floodguard.public-base-url}") String publicBaseUrl;
+    @Value("${floodguard.smtp-from}") String smtpFrom;
     @Value("${floodguard.officer-email}") String officerEmail;
     @Value("${floodguard.admin-email}") String adminEmail;
 
@@ -117,8 +119,11 @@ public class AlertService {
     private String send(String to,String body) {
         if(!smsEnabled) return null;
         if(sid.isBlank()||token.isBlank()||from.isBlank()) throw new IllegalStateException("Twilio is not configured");
+        if(!publicBaseUrl.startsWith("https://")||publicBaseUrl.contains("localhost"))
+            throw new IllegalStateException("Live SMS requires a public HTTPS base URL for signed callbacks");
         var form=new LinkedMultiValueMap<String,String>();
         form.add("To",to);form.add("From",from);form.add("Body",body);
+        form.add("StatusCallback",publicBaseUrl.replaceAll("/+$", "")+"/api/v1/twilio/status");
         JsonNode response=http.post().uri("https://api.twilio.com/2010-04-01/Accounts/"+sid+"/Messages.json")
             .header(HttpHeaders.AUTHORIZATION,"Basic "+Base64.getEncoder().encodeToString((sid+":"+token).getBytes(StandardCharsets.UTF_8)))
             .contentType(MediaType.APPLICATION_FORM_URLENCODED).body(form).retrieve().body(JsonNode.class);
@@ -134,6 +139,7 @@ public class AlertService {
         if(recipient==null||recipient.isBlank()) return;
         try {
             SimpleMailMessage message=new SimpleMailMessage();
+            if(smtpFrom!=null&&!smtpFrom.isBlank())message.setFrom(smtpFrom);
             message.setTo(recipient);message.setSubject(subject);message.setText(body);
             mail.send(message);
         } catch(Exception ignored) { metrics.counter("floodguard_email_failures_total").increment(); }

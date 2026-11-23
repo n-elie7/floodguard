@@ -14,6 +14,9 @@ spring:
     port: ${SMTP_PORT:1025}
     username: ${SMTP_USER:}
     password: ${SMTP_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${SMTP_AUTH:false}
+      mail.smtp.starttls.enable: ${SMTP_STARTTLS_ENABLE:false}
 server:
   forward-headers-strategy: framework
 management:
@@ -40,5 +43,6 @@ floodguard:
   public-base-url: ${PUBLIC_BASE_URL:}
   officer-email: ${OFFICER_EMAIL:}
   admin-email: ${ADMIN_EMAIL:}
+  smtp-from: ${SMTP_FROM:}
   road-vulnerability-threshold: ${ROAD_VULNERABILITY_THRESHOLD:0.6}
   ingest-on-startup: ${INGEST_ON_STARTUP:false}

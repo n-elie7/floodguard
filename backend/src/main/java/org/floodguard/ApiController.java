@@ -3,7 +3,10 @@ package org.floodguard;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.LinkedHashMap;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -16,8 +19,9 @@ public class ApiController {
     private final GeoImporter importer;
     private final IngestionService ingestion;
     private final BacktestService backtest;
-    ApiController(JdbcTemplate db, AlertService alerts, GeoImporter importer, IngestionService ingestion,BacktestService backtest) {
-        this.db=db; this.alerts=alerts; this.importer=importer; this.ingestion=ingestion;this.backtest=backtest;
+    private final TwilioWebhookVerifier twilioVerifier;
+    ApiController(JdbcTemplate db, AlertService alerts, GeoImporter importer, IngestionService ingestion,BacktestService backtest,TwilioWebhookVerifier twilioVerifier) {
+        this.db=db; this.alerts=alerts; this.importer=importer; this.ingestion=ingestion;this.backtest=backtest;this.twilioVerifier=twilioVerifier;
     }
 
     @GetMapping("/sectors")
@@ -79,15 +83,20 @@ public class ApiController {
         return alerts.register(body.get("sectorId"),body.get("phone"));
     }
 
-    @PostMapping("/twilio/inbound")
-    public String inbound(@RequestParam("From") String phone,@RequestParam("Body") String message) {
-        // Production deployments must protect this callback with Twilio signature verification at the ingress.
+    @PostMapping(value="/twilio/inbound",produces=MediaType.APPLICATION_XML_VALUE)
+    public String inbound(HttpServletRequest request) {
+        if(!twilioVerifier.valid(request))throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Invalid Twilio signature");
+        String phone=request.getParameter("From"),message=request.getParameter("Body");
+        if(phone==null||message==null)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Missing message fields");
         if ("STOP".equalsIgnoreCase(message.trim())) alerts.unsubscribe(phone);
         return "<Response/>";
     }
 
     @PostMapping("/twilio/status")
-    public void delivery(@RequestParam("MessageSid") String sid,@RequestParam("MessageStatus") String status) {
+    public void delivery(HttpServletRequest request) {
+        if(!twilioVerifier.valid(request))throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Invalid Twilio signature");
+        String sid=request.getParameter("MessageSid"),status=request.getParameter("MessageStatus");
+        if(sid==null||status==null)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Missing delivery fields");
         alerts.updateStatus(sid,status);
     }
 
@@ -96,6 +105,18 @@ public class ApiController {
         return Map.of("subscriberCount",db.queryForObject("SELECT count(*) FROM subscriptions WHERE active",Long.class),
             "mustChangePassword",db.queryForObject("SELECT must_change_password FROM officer_accounts WHERE username=?",Boolean.class,principal.getName()),
             "deliveryRecords",db.queryForList("SELECT id,alert_id,status,sent_at,updated_at,error FROM delivery_records ORDER BY sent_at DESC LIMIT 100"));
+    }
+
+    @GetMapping("/officer/data-status")
+    public Map<String,Object> dataStatus() {
+        Map<String,Object> status=new LinkedHashMap<>();
+        status.put("sectorCount",db.queryForObject("SELECT count(*) FROM sectors",Long.class));
+        status.put("currentSectorCount",db.queryForObject("SELECT count(DISTINCT sector_id) FROM risk_assessments WHERE assessed_at>now()-interval '3 hours'",Long.class));
+        status.put("roadCount",db.queryForObject("SELECT count(*) FROM roads",Long.class));
+        status.put("verifiedRoadCount",db.queryForObject("SELECT count(*) FROM roads WHERE vulnerability IS NOT NULL AND nullif(vulnerability_source,'') IS NOT NULL",Long.class));
+        status.put("verifiedShelterCount",db.queryForObject("SELECT count(*) FROM shelters WHERE verified AND nullif(source,'') IS NOT NULL",Long.class));
+        status.put("latestAssessmentAt",db.queryForObject("SELECT max(assessed_at) FROM risk_assessments",java.time.OffsetDateTime.class));
+        return status;
     }
 
     @GetMapping("/officer/session")

@@ -1,0 +1,146 @@
+services:
+  db:
+    image: postgis/postgis:17-3.5
+    environment:
+      POSTGRES_DB: floodguard
+      POSTGRES_USER: floodguard
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:?Set DATABASE_PASSWORD in .env}
+    volumes: [db-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U floodguard -d floodguard"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+  backend:
+    build: ./backend
+    image: floodguard-backend
+    environment:
+      DATABASE_URL: jdbc:postgresql://db:5432/floodguard
+      DATABASE_USER: floodguard
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?Set DATABASE_PASSWORD in .env}
+      WORKER_ENABLED: "false"
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+      PHONE_ENCRYPTION_KEY: ${PHONE_ENCRYPTION_KEY:?Set PHONE_ENCRYPTION_KEY in .env}
+      SMS_ENABLED: ${SMS_ENABLED:-false}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_FROM: ${TWILIO_FROM:-}
+      PUBLIC_BASE_URL: https://${PUBLIC_DOMAIN:-localhost}
+      SMTP_HOST: ${SMTP_HOST:-localhost}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_AUTH: ${SMTP_AUTH:-false}
+      SMTP_STARTTLS_ENABLE: ${SMTP_STARTTLS_ENABLE:-false}
+      SMTP_FROM: ${SMTP_FROM:-}
+      OFFICER_EMAIL: ${OFFICER_EMAIL:-}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ROAD_VULNERABILITY_THRESHOLD: ${ROAD_VULNERABILITY_THRESHOLD:-0.6}
+    depends_on:
+      db: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+  worker:
+    image: floodguard-backend
+    environment:
+      DATABASE_URL: jdbc:postgresql://db:5432/floodguard
+      DATABASE_USER: floodguard
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?Set DATABASE_PASSWORD in .env}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+      PHONE_ENCRYPTION_KEY: ${PHONE_ENCRYPTION_KEY:?Set PHONE_ENCRYPTION_KEY in .env}
+      WORKER_ENABLED: "true"
+      SMS_ENABLED: ${SMS_ENABLED:-false}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_FROM: ${TWILIO_FROM:-}
+      PUBLIC_BASE_URL: https://${PUBLIC_DOMAIN:-localhost}
+      SMTP_HOST: ${SMTP_HOST:-localhost}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_AUTH: ${SMTP_AUTH:-false}
+      SMTP_STARTTLS_ENABLE: ${SMTP_STARTTLS_ENABLE:-false}
+      SMTP_FROM: ${SMTP_FROM:-}
+      OFFICER_EMAIL: ${OFFICER_EMAIL:-}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ROAD_VULNERABILITY_THRESHOLD: ${ROAD_VULNERABILITY_THRESHOLD:-0.6}
+    depends_on:
+      db: { condition: service_healthy }
+      backend: { condition: service_started }
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+  frontend:
+    build: ./frontend
+    depends_on: [backend]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+  caddy:
+    image: caddy:2.10
+    ports: ["80:80", "443:443"]
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [frontend, backend]
+    restart: unless-stopped
+  prometheus:
+    image: prom/prometheus:v3.6.0
+    volumes:
+      [
+        "./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro",
+        "prom-data:/prometheus",
+      ]
+    depends_on: [backend]
+    restart: unless-stopped
+  grafana:
+    image: grafana/grafana:12.2.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_SERVER_ROOT_URL: https://${PUBLIC_DOMAIN:-localhost}/grafana/
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on: [prometheus]
+    restart: unless-stopped
+  road-import:
+    image: python:3.12-slim
+    profiles: [data]
+    working_dir: /work
+    volumes: ["./data:/work:ro"]
+    environment:
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+    command:
+      [
+        "sh",
+        "-c",
+        "pip install --no-cache-dir pyshp==2.3.1 && python import_roads.py",
+      ]
+    depends_on: [backend]
+volumes:
+  db-data:
+  caddy-data:
+  caddy-config:
+  prom-data:
+  grafana-data:

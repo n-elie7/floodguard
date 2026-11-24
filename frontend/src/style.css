@@ -880,13 +880,15 @@ select:focus {
   display: grid;
   gap: 1rem;
 }
-.history-tools form {
+.history-tools form,
+.preview-form {
   display: flex;
   align-items: end;
   gap: 0.7rem;
   flex-wrap: wrap;
 }
-.history-tools label {
+.history-tools label,
+.preview-form label {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
@@ -894,16 +896,36 @@ select:focus {
   font-weight: 700;
 }
 .history-tools input,
-.history-tools select {
+.history-tools select,
+.preview-form input,
+.preview-form select {
   padding: 0.48rem;
 }
-.history-tools button {
+.history-tools button,
+.preview-form button {
   border: 1px solid #102a40;
   background: #102a40;
   color: white;
   border-radius: 3px;
   padding: 0.55rem 0.8rem;
   font-weight: 700;
+}
+.preview-form {
+  margin-top: 0.9rem;
+}
+.preview-result {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin: 1rem 0 0;
+  padding: 0.8rem;
+  border: 1px solid #aeb8b0;
+  background: #f4f6ef;
+}
+.preview-result > span:last-child {
+  font-size: 0.82rem;
+  color: #445e69;
 }
 .history-result {
   margin-top: 1rem;

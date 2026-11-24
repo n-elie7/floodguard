@@ -185,7 +185,7 @@ function RainChart({ forecast }) {
     </div>
   );
 }
-function Detail({ sector, forecast, roads }) {
+function Detail({ sector, forecast, roads, subscribers }) {
   if (!sector)
     return (
       <div className="detail-empty">
@@ -221,6 +221,12 @@ function Detail({ sector, forecast, roads }) {
           : "Last experimental score; refresh pending"}{" "}
         · Updated {date(sector.assessed_at)}
       </p>
+      {subscribers != null && (
+        <p className="score-note">
+          {subscribers} active SMS{" "}
+          {subscribers === 1 ? "subscriber" : "subscribers"} in this sector
+        </p>
+      )}
       <div className="panel-section">
         <div className="panel-title">
           <h3>Hourly rainfall</h3>
@@ -278,8 +284,21 @@ function Officer({
   setAuth,
 }) {
   const [tab, setTab] = useState("map"),
-    [message, setMessage] = useState("");
+    [message, setMessage] = useState(""),
+    [subscribers, setSubscribers] = useState(null);
   const current = sectors.find((s) => s.id === selected);
+  useEffect(() => {
+    if (!selected) {
+      setSubscribers(null);
+      return;
+    }
+    setSubscribers(null);
+    api(`/officer/sectors/${selected}/subscribers`, {
+      headers: { Authorization: `Basic ${auth}` },
+    })
+      .then((result) => setSubscribers(result.activeSubscribers))
+      .catch(() => setSubscribers(null));
+  }, [selected, auth, sectors]);
   const admin = async (path) => {
     try {
       setMessage("Working…");
@@ -385,6 +404,7 @@ function Officer({
               sector={current}
               forecast={forecast}
               roads={hasCurrentAssessment(current) ? roads : []}
+              subscribers={subscribers}
             />
             <div className="panel-section alert-preview">
               <div className="panel-title">
@@ -521,6 +541,11 @@ function OperationsPanel({ sectors, auth }) {
     [from, setFrom] = useState("2023-05-01"),
     [to, setTo] = useState("2023-05-03"),
     [sector, setSector] = useState(""),
+    [previewRain, setPreviewRain] = useState("80"),
+    [previewSoil, setPreviewSoil] = useState("0.40"),
+    [previewBaseline, setPreviewBaseline] = useState("5"),
+    [preview, setPreview] = useState(null),
+    [previewError, setPreviewError] = useState(""),
     [report, setReport] = useState(null),
     [error, setError] = useState("");
   useEffect(() => {
@@ -530,7 +555,7 @@ function OperationsPanel({ sectors, auth }) {
     api("/officer/data-status", { headers: { Authorization: `Basic ${auth}` } })
       .then(setDataStatus)
       .catch(() => {});
-  }, [auth]);
+  }, [auth, sectors]);
   useEffect(() => {
     if (!sector && sectors.length) setSector(sectors[0].id);
   }, [sectors, sector]);
@@ -591,6 +616,107 @@ function OperationsPanel({ sectors, auth }) {
           </div>
         ) : (
           <p className="quiet">No SMS delivery records yet.</p>
+        )}
+      </div>
+      <div className="list-panel">
+        <h2>Risk scoring preview</h2>
+        <p className="quiet">
+          Try hypothetical rainfall and soil moisture to explain the model. This
+          preview does not save an assessment or send alerts.
+        </p>
+        <form
+          className="preview-form"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            setPreviewError("");
+            setPreview(null);
+            try {
+              setPreview(
+                await api("/officer/risk-preview", {
+                  method: "POST",
+                  headers: {
+                    Authorization: `Basic ${auth}`,
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    sectorId: sector,
+                    rainfallMm: Number(previewRain),
+                    soilMoisture: Number(previewSoil),
+                    baselineDailyMm: Number(previewBaseline),
+                  }),
+                }),
+              );
+            } catch {
+              setPreviewError(
+                "Could not calculate the preview. Check the inputs.",
+              );
+            }
+          }}
+        >
+          <label>
+            Sector
+            <select
+              value={sector}
+              onChange={(event) => setSector(event.target.value)}
+            >
+              {sectors.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Rain in 12 hours (mm)
+            <input
+              type="number"
+              min="0"
+              max="500"
+              step="0.1"
+              value={previewRain}
+              onChange={(event) => setPreviewRain(event.target.value)}
+              required
+            />
+          </label>
+          <label>
+            Soil moisture (m³/m³)
+            <input
+              type="number"
+              min="0"
+              max="1"
+              step="0.01"
+              value={previewSoil}
+              onChange={(event) => setPreviewSoil(event.target.value)}
+              required
+            />
+          </label>
+          <label>
+            Daily baseline (mm)
+            <input
+              type="number"
+              min="0"
+              max="500"
+              step="0.1"
+              value={previewBaseline}
+              onChange={(event) => setPreviewBaseline(event.target.value)}
+              required
+            />
+          </label>
+          <button disabled={!sector}>Calculate preview</button>
+        </form>
+        {previewError && <p role="alert">{previewError}</p>}
+        {preview && (
+          <p className="preview-result" role="status">
+            <span className={"risk-pill " + preview.level.toLowerCase()}>
+              {preview.level}
+            </span>
+            <strong>{preview.score} / 100</strong>
+            <span>
+              Hypothetical result for {preview.sectorName}. Sector thresholds:
+              Moderate {preview.moderateThreshold}, High {preview.highThreshold}
+              .
+            </span>
+          </p>
         )}
       </div>
       <div className="list-panel">
@@ -773,13 +899,15 @@ function Public({ sectors, selected, setSelected, forecast }) {
               e.preventDefault();
               setState("Registering…");
               try {
-                await api("/subscriptions", {
+                const result = await api("/subscriptions", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ sectorId: selected, phone }),
                 });
                 setState(
-                  "Registered. A confirmation SMS will arrive if delivery is configured.",
+                  result.deliveryMode === "live"
+                    ? "Registered. Check your phone for a confirmation SMS."
+                    : "Registered, but SMS delivery is disabled in this installation.",
                 );
               } catch (ex) {
                 setState(

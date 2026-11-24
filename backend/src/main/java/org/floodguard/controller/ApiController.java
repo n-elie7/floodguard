@@ -13,10 +13,12 @@ import org.floodguard.model.Sector;
 import org.floodguard.repository.OfficerAccountRepository;
 import org.floodguard.repository.PublicDataRepository;
 import org.floodguard.repository.SectorRepository;
+import org.floodguard.repository.SubscriptionRepository;
 import org.floodguard.service.AlertService;
 import org.floodguard.service.BacktestService;
 import org.floodguard.service.GeoImporter;
 import org.floodguard.service.IngestionService;
+import org.floodguard.service.RiskModel;
 import org.floodguard.service.TwilioWebhookVerifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -43,6 +45,8 @@ public class ApiController {
   private final TwilioWebhookVerifier twilioVerifier;
   private final SectorRepository sectors;
   private final OfficerAccountRepository accounts;
+  private final RiskModel riskModel;
+  private final SubscriptionRepository subscriptions;
 
   @GetMapping("/sectors")
   public List<Map<String, Object>> sectors() {
@@ -135,6 +139,14 @@ public class ApiController {
     return status;
   }
 
+  @GetMapping("/officer/sectors/{id}/subscribers")
+  public Map<String, Object> sectorSubscribers(@PathVariable String id) {
+    if (!sectors.existsById(id)) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Sector not found");
+    }
+    return Map.of("sectorId", id, "activeSubscribers", subscriptions.countBySectorIdAndActiveTrue(id));
+  }
+
   @GetMapping("/officer/session")
   public Map<String, Object> session(Principal principal) {
     return Map.of(
@@ -165,6 +177,42 @@ public class ApiController {
   public Map<String, Object> backtest(
       @RequestParam String sectorId, @RequestParam LocalDate from, @RequestParam LocalDate to) {
     return backtest.run(sectorId, from, to);
+  }
+
+  @PostMapping("/officer/risk-preview")
+  public Map<String, Object> riskPreview(@RequestBody Map<String, Object> body) {
+    Object sectorId = body.get("sectorId");
+    Object rain = body.get("rainfallMm");
+    Object soil = body.get("soilMoisture");
+    Object baseline = body.get("baselineDailyMm");
+    if (!(sectorId instanceof String id)
+        || !(rain instanceof Number rainfall)
+        || !(soil instanceof Number moisture)
+        || !(baseline instanceof Number daily)
+        || !Double.isFinite(rainfall.doubleValue())
+        || !Double.isFinite(moisture.doubleValue())
+        || !Double.isFinite(daily.doubleValue())
+        || rainfall.doubleValue() < 0
+        || rainfall.doubleValue() > 500
+        || moisture.doubleValue() < 0
+        || moisture.doubleValue() > 1
+        || daily.doubleValue() < 0
+        || daily.doubleValue() > 500) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid preview inputs");
+    }
+    Sector sector =
+        sectors
+            .findById(id)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Sector not found"));
+    int score = riskModel.score(rainfall.doubleValue(), moisture.doubleValue(), daily.doubleValue());
+    return Map.of(
+        "sectorName", sector.getName(),
+        "score", score,
+        "level", riskModel.level(score, sector.getModerateThreshold(), sector.getHighThreshold()),
+        "moderateThreshold", sector.getModerateThreshold(),
+        "highThreshold", sector.getHighThreshold(),
+        "simulation", true);
   }
 
   @PutMapping("/admin/sectors/{id}/thresholds")

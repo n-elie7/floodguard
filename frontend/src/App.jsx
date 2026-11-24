@@ -35,6 +35,17 @@ const date = (value) =>
         timeStyle: "short",
       })
     : "Awaiting first assessment";
+const hasCurrentAssessment = (sector) => {
+  const assessed = Date.parse(sector?.assessed_at || "");
+  const age = Date.now() - assessed;
+  return (
+    Number.isFinite(assessed) &&
+    age >= -5 * 60 * 1000 &&
+    age <= 3 * 60 * 60 * 1000
+  );
+};
+const visibleLevel = (sector) =>
+  hasCurrentAssessment(sector) ? sector.level || "UNKNOWN" : "UNKNOWN";
 const parse = (value) => {
   try {
     return typeof value === "string" ? JSON.parse(value) : value;
@@ -66,7 +77,12 @@ function RiskMap({ sectors, selected, onSelect, roads = [] }) {
             id: s.id,
             name: s.name,
             score: s.score,
-            level: s.level,
+            level: visibleLevel(s),
+            status: hasCurrentAssessment(s)
+              ? s.level || "No assessment"
+              : s.assessed_at
+                ? "Data outdated"
+                : "No assessment",
           },
           geometry: parse(s.boundary),
         }))
@@ -126,10 +142,9 @@ function RiskMap({ sectors, selected, onSelect, roads = [] }) {
           fillOpacity: 0.55,
         })}
         onEachFeature={(f, layer) => {
-          layer.bindTooltip(
-            `${f.properties.name} · ${f.properties.level || "No assessment"}`,
-            { sticky: true },
-          );
+          layer.bindTooltip(`${f.properties.name} · ${f.properties.status}`, {
+            sticky: true,
+          });
           layer.on("click", () => onSelect(f.properties.id));
         }}
       />
@@ -179,6 +194,7 @@ function Detail({ sector, forecast, roads }) {
         <p>Choose an area on the map to inspect its latest risk assessment.</p>
       </div>
     );
+  const current = hasCurrentAssessment(sector);
   return (
     <>
       <div className="detail-head">
@@ -187,10 +203,12 @@ function Detail({ sector, forecast, roads }) {
         <p>{sector.district} District</p>
       </div>
       <div className="risk-line">
-        <span
-          className={"risk-pill " + (sector.level || "UNKNOWN").toLowerCase()}
-        >
-          {sector.level || "Awaiting data"}
+        <span className={"risk-pill " + visibleLevel(sector).toLowerCase()}>
+          {current
+            ? sector.level
+            : sector.assessed_at
+              ? "Data outdated"
+              : "Awaiting data"}
         </span>
         <strong>
           {sector.score == null ? "—" : sector.score}
@@ -198,7 +216,10 @@ function Detail({ sector, forecast, roads }) {
         </strong>
       </div>
       <p className="score-note">
-        Experimental risk index · Updated {date(sector.assessed_at)}
+        {current
+          ? "Experimental risk index"
+          : "Last experimental score; refresh pending"}{" "}
+        · Updated {date(sector.assessed_at)}
       </p>
       <div className="panel-section">
         <div className="panel-title">
@@ -332,7 +353,7 @@ function Officer({
                   sectors={sectors}
                   selected={selected}
                   onSelect={setSelected}
-                  roads={roads}
+                  roads={hasCurrentAssessment(current) ? roads : []}
                 />
               ) : (
                 <div className="empty-map">
@@ -349,7 +370,7 @@ function Officer({
                 {["HIGH", "MODERATE", "LOW", "UNKNOWN"].map((l) => (
                   <span key={l}>
                     <i style={{ background: colors[l] }} />
-                    {l === "UNKNOWN" ? "No assessment" : l.toLowerCase()}
+                    {l === "UNKNOWN" ? "No current data" : l.toLowerCase()}
                   </span>
                 ))}
               </div>
@@ -360,7 +381,11 @@ function Officer({
             </div>
           </section>
           <aside className="side-panel">
-            <Detail sector={current} forecast={forecast} roads={roads} />
+            <Detail
+              sector={current}
+              forecast={forecast}
+              roads={hasCurrentAssessment(current) ? roads : []}
+            />
             <div className="panel-section alert-preview">
               <div className="panel-title">
                 <h3>Alert feed</h3>
@@ -491,6 +516,7 @@ function Threshold({ sector, auth, onSaved }) {
 }
 function OperationsPanel({ sectors, auth }) {
   const [summary, setSummary] = useState(null),
+    [dataStatus, setDataStatus] = useState(null),
     [day, setDay] = useState(new Date().toISOString().slice(0, 10)),
     [from, setFrom] = useState("2023-05-01"),
     [to, setTo] = useState("2023-05-03"),
@@ -500,6 +526,9 @@ function OperationsPanel({ sectors, auth }) {
   useEffect(() => {
     api("/officer/summary", { headers: { Authorization: `Basic ${auth}` } })
       .then(setSummary)
+      .catch(() => {});
+    api("/officer/data-status", { headers: { Authorization: `Basic ${auth}` } })
+      .then(setDataStatus)
       .catch(() => {});
   }, [auth]);
   useEffect(() => {
@@ -519,6 +548,35 @@ function OperationsPanel({ sectors, auth }) {
   };
   return (
     <>
+      <div className="list-panel">
+        <h2>Data coverage</h2>
+        {dataStatus ? (
+          <div className="coverage-grid">
+            <p>
+              <strong>
+                {dataStatus.currentSectorCount} / {dataStatus.sectorCount}
+              </strong>
+              <span>sectors assessed in the last 3 hours</span>
+            </p>
+            <p>
+              <strong>
+                {dataStatus.verifiedRoadCount} / {dataStatus.roadCount}
+              </strong>
+              <span>roads with sourced vulnerability scores</span>
+            </p>
+            <p>
+              <strong>{dataStatus.verifiedShelterCount}</strong>
+              <span>verified shelters</span>
+            </p>
+          </div>
+        ) : (
+          <p className="quiet">Checking data coverage…</p>
+        )}
+        <p className="quiet">
+          Last assessment: {date(dataStatus?.latestAssessmentAt)}. The risk
+          model still needs validation against observed flood events.
+        </p>
+      </div>
       <div className="list-panel">
         <h2>Delivery status</h2>
         <p>{summary?.subscriberCount ?? "—"} active SMS subscriptions</p>
@@ -670,21 +728,27 @@ function Public({ sectors, selected, setSelected, forecast }) {
             <div>
               <span className="section-label">{current.name}</span>
               <h2>
-                {current.level
-                  ? `${current.level.toLowerCase()} risk`
-                  : "Assessment pending"}
+                {!hasCurrentAssessment(current)
+                  ? current.assessed_at
+                    ? "Assessment outdated"
+                    : "Assessment pending"
+                  : current.level
+                    ? `${current.level.toLowerCase()} risk`
+                    : "Assessment pending"}
               </h2>
               <p>
-                Risk index {current.score ?? "—"} / 100 ·{" "}
-                {date(current.assessed_at)}
+                {hasCurrentAssessment(current)
+                  ? "Risk index"
+                  : "Last risk index"}{" "}
+                {current.score ?? "—"} / 100 · {date(current.assessed_at)}
               </p>
             </div>
             <span
-              className={
-                "risk-pill " + (current.level || "UNKNOWN").toLowerCase()
-              }
+              className={"risk-pill " + visibleLevel(current).toLowerCase()}
             >
-              {current.level || "No data"}
+              {hasCurrentAssessment(current)
+                ? current.level
+                : "No current data"}
             </span>
           </div>
         )}
@@ -760,6 +824,10 @@ function Login({ setAuth }) {
         </div>
         <h1>Officer access</h1>
         <p>Sign in to monitor Kigali risk and manage sector data.</p>
+        <p className="login-help">
+          If you changed your password, use the new one. The password in{" "}
+          <code>.env</code> only creates the account in a fresh database.
+        </p>
         <form
           onSubmit={async (e) => {
             e.preventDefault();
@@ -843,7 +911,11 @@ function PasswordChange({ auth, setAuth, done }) {
           <span>FloodGuard</span>
         </div>
         <h1>Set a new password</h1>
-        <p>Change the initial officer password before using the dashboard.</p>
+        <p>
+          Change the initial officer password before using the dashboard. This
+          is required once for each fresh database. Remember the new password
+          for future sign-ins.
+        </p>
         <form
           onSubmit={async (e) => {
             e.preventDefault();

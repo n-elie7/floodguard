@@ -482,6 +482,33 @@ select:focus {
   padding: 1rem;
   margin-top: 1.2rem;
 }
+.coverage-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.coverage-grid p {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  border-top: 1px solid #b7c5bd;
+  padding-top: 0.65rem;
+  margin: 0.2rem 0;
+}
+.coverage-grid strong {
+  font-size: 1.35rem;
+  color: #17384c;
+  font-variant-numeric: tabular-nums;
+}
+.coverage-grid span {
+  font-size: 0.77rem;
+  color: #526c75;
+}
+@media (max-width: 600px) {
+  .coverage-grid {
+    grid-template-columns: 1fr;
+  }
+}
 .alert-row,
 .threshold-row {
   display: grid;

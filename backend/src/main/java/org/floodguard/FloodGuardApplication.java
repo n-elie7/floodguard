@@ -8,8 +8,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 public class FloodGuardApplication {
 
-	public static void main(String[] args) {
-		SpringApplication.run(FloodGuardApplication.class, args);
-	}
-
+  public static void main(String[] args) {
+    SpringApplication.run(FloodGuardApplication.class, args);
+  }
 }

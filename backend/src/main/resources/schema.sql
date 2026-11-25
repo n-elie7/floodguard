@@ -83,6 +83,17 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     UNIQUE (sector_id, phone_hash)
 );
 
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+    endpoint text PRIMARY KEY,
+    sector_id text NOT NULL REFERENCES sectors (id) ON DELETE CASCADE,
+    p256dh text NOT NULL,
+    auth_secret text NOT NULL,
+    active boolean NOT NULL DEFAULT true,
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS push_subscriptions_sector_idx
+    ON push_subscriptions (sector_id) WHERE active;
+
 CREATE TABLE IF NOT EXISTS alert_events (
     id bigserial PRIMARY KEY,
     sector_id text NOT NULL REFERENCES sectors (id) ON DELETE CASCADE,

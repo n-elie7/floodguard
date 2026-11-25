@@ -28,6 +28,11 @@ const api = async (path, options = {}) => {
   if (!r.ok) throw new Error((await r.text()).slice(0, 160));
   return r.status === 204 ? null : r.json();
 };
+const pushKeyBytes = (encoded) => {
+  const base64 = encoded.replace(/-/g, "+").replace(/_/g, "/");
+  const bytes = atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, "="));
+  return Uint8Array.from(bytes, (character) => character.charCodeAt(0));
+};
 const date = (value) =>
   value
     ? new Date(value).toLocaleString("en-RW", {
@@ -812,8 +817,89 @@ function OperationsPanel({ sectors, auth }) {
 }
 function Public({ sectors, selected, setSelected, forecast }) {
   const [phone, setPhone] = useState(""),
-    [state, setState] = useState("");
+    [state, setState] = useState(""),
+    [pushState, setPushState] = useState(""),
+    [pushBusy, setPushBusy] = useState(false),
+    [notificationConfig, setNotificationConfig] = useState(null),
+    [pushSector, setPushSector] = useState(
+      localStorage.getItem("floodguard-push-sector") || "",
+    );
+  useEffect(() => {
+    api("/notifications/config")
+      .then(setNotificationConfig)
+      .catch(() => setPushState("Notification settings are unavailable."));
+  }, []);
   const current = sectors.find((s) => s.id === selected);
+  const pushSupported =
+    "serviceWorker" in navigator &&
+    "PushManager" in window &&
+    "Notification" in window;
+  const enablePush = async () => {
+    if (!selected || !notificationConfig?.enabled || !pushSupported) return;
+    setPushBusy(true);
+    setPushState("Enabling browser alerts…");
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        setPushState(
+          "Notifications are blocked. Allow them in your browser settings.",
+        );
+        return;
+      }
+      const registration =
+        await navigator.serviceWorker.register("/push-sw.js");
+      let subscription = await registration.pushManager.getSubscription();
+      if (!subscription) {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: pushKeyBytes(notificationConfig.publicKey),
+        });
+      }
+      await api("/push/subscriptions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sectorId: selected, ...subscription.toJSON() }),
+      });
+      localStorage.setItem("floodguard-push-sector", selected);
+      setPushSector(selected);
+      setPushState("Browser alerts are on. Check for a test notification.");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "NotAllowedError") {
+        setPushState(
+          "This browser blocked notifications. Allow FloodGuard in browser settings and try again.",
+        );
+      } else {
+        setPushState(
+          "Could not enable alerts. Check browser permissions and try again.",
+        );
+      }
+    } finally {
+      setPushBusy(false);
+    }
+  };
+  const disablePush = async () => {
+    setPushBusy(true);
+    setPushState("Turning off browser alerts…");
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      if (subscription) {
+        await api("/push/subscriptions", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endpoint: subscription.endpoint }),
+        });
+        await subscription.unsubscribe();
+      }
+      localStorage.removeItem("floodguard-push-sector");
+      setPushSector("");
+      setPushState("Browser alerts are off on this device.");
+    } catch {
+      setPushState("Could not turn off alerts. Try again shortly.");
+    } finally {
+      setPushBusy(false);
+    }
+  };
   return (
     <div className="public-shell">
       <header className="public-header">
@@ -885,50 +971,127 @@ function Public({ sectors, selected, setSelected, forecast }) {
             onSelect={setSelected}
           />
         </section>
+        <section className="signup browser-alerts">
+          <div>
+            <Bell size={23} />
+            <h2>Get browser alerts</h2>
+            <p>
+              Receive a notification on this device when your sector changes to
+              High risk. No phone number or SMS credit is needed.
+            </p>
+          </div>
+          <div className="alert-actions">
+            <p>
+              {pushSector
+                ? `Alerts on for ${sectors.find((sector) => sector.id === pushSector)?.name || "your sector"}.`
+                : "Choose a sector above, then allow notifications when your browser asks."}
+            </p>
+            <button
+              type="button"
+              disabled={
+                !selected ||
+                !notificationConfig?.enabled ||
+                !pushSupported ||
+                pushBusy
+              }
+              onClick={enablePush}
+            >
+              {pushSector && pushSector === selected
+                ? "Send another test"
+                : "Enable browser alerts"}
+            </button>
+            {pushSector && (
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={pushBusy}
+                onClick={disablePush}
+              >
+                Turn off browser alerts
+              </button>
+            )}
+            {!pushSupported && (
+              <p>
+                Browser alerts are not supported here. On iPhone, add this site
+                to your Home Screen.
+              </p>
+            )}
+            {notificationConfig && !notificationConfig.enabled && (
+              <p>Browser alerts are not configured on this server yet.</p>
+            )}
+            <p role="status">{pushState}</p>
+          </div>
+        </section>
         <section className="signup">
           <div>
             <Bell size={23} />
             <h2>Get SMS warnings</h2>
             <p>
-              Register for High risk alerts in your sector. Reply STOP to any
-              message to unsubscribe.
+              {notificationConfig?.smsEnabled
+                ? "Register for High risk SMS alerts in your sector. You can stop alerts here at any time."
+                : "SMS delivery is unavailable in this installation. Use the free browser alerts above."}
             </p>
           </div>
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              setState("Registering…");
-              try {
-                const result = await api("/subscriptions", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ sectorId: selected, phone }),
-                });
-                setState(
-                  result.deliveryMode === "live"
-                    ? "Registered. Check your phone for a confirmation SMS."
-                    : "Registered, but SMS delivery is disabled in this installation.",
-                );
-              } catch (ex) {
-                setState(
-                  "Registration failed. Check the sector and phone number.",
-                );
-              }
-            }}
-          >
-            <label>
-              Phone number
-              <input
-                type="tel"
-                placeholder="+2507…"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                required
-              />
-            </label>
-            <button disabled={!selected}>Register for alerts</button>
-            <p role="status">{state}</p>
-          </form>
+          {notificationConfig?.smsEnabled && (
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setState("Registering…");
+                try {
+                  const result = await api("/subscriptions", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ sectorId: selected, phone }),
+                  });
+                  setState(
+                    result.deliveryMode === "live"
+                      ? "Registered. Check your phone for a confirmation SMS."
+                      : "Registered, but SMS delivery is disabled in this installation.",
+                  );
+                } catch (ex) {
+                  setState(
+                    "Registration failed. Check the sector and phone number.",
+                  );
+                }
+              }}
+            >
+              <label>
+                Phone number
+                <input
+                  type="tel"
+                  placeholder="+2507…"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  required
+                />
+              </label>
+              <button disabled={!selected}>Register for alerts</button>
+              <button
+                type="button"
+                disabled={!selected || !phone}
+                onClick={async () => {
+                  setState("Removing subscription…");
+                  try {
+                    await api("/subscriptions/unsubscribe", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ sectorId: selected, phone }),
+                    });
+                    setState(
+                      "Alerts turned off for this sector and phone number.",
+                    );
+                  } catch {
+                    setState(
+                      "Could not turn off alerts. Check the sector and phone number.",
+                    );
+                  }
+                }}
+              >
+                Stop alerts
+              </button>
+              <p role="status">{state}</p>
+            </form>
+          )}
         </section>
       </main>
       <footer className="safety">

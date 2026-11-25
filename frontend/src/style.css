@@ -671,6 +671,29 @@ select:focus {
   font-size: 0.8rem;
   margin: 0;
 }
+.browser-alerts {
+  background: #e6ebe1;
+  border: 1px solid #a8b6aa;
+  border-top: 3px solid #32698a;
+  padding: 1.3rem;
+}
+.alert-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.65rem;
+}
+.alert-actions p {
+  margin: 0;
+  font-size: 0.84rem;
+}
+.signup .secondary-button {
+  background: transparent;
+  color: #102a40;
+}
+.signup .secondary-button:hover {
+  background: #d5e0d9;
+}
 .login-page {
   min-height: 100vh;
   background: #e5e8df;

@@ -29,6 +29,13 @@ public class AlertRepository {
     jdbc.update("UPDATE subscriptions SET active = false WHERE phone_hash = ?", phoneHash);
   }
 
+  public void unsubscribe(String sectorId, String phoneHash) {
+    jdbc.update(
+        "UPDATE subscriptions SET active = false WHERE sector_id = ? AND phone_hash = ?",
+        sectorId,
+        phoneHash);
+  }
+
   public void updateDeliveryStatus(String providerId, String status) {
     jdbc.update(
         """

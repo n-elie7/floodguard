@@ -31,6 +31,7 @@ public class AlertService {
   private final SectorRepository sectors;
   private final JavaMailSender mail;
   private final MeterRegistry metrics;
+  private final BrowserPushService browserPush;
   private final SecureRandom random = new SecureRandom();
   private final RestClient http = RestClient.create();
 
@@ -61,6 +62,10 @@ public class AlertService {
   @Value("${floodguard.admin-email}")
   private String adminEmail;
 
+  public boolean isSmsEnabled() {
+    return smsEnabled;
+  }
+
   public Map<String, Object> register(String sectorId, String phone) {
     if (sectorId == null || phone == null || !phone.matches("\\+[1-9][0-9]{7,14}"))
       throw new org.springframework.web.server.ResponseStatusException(
@@ -77,13 +82,23 @@ public class AlertService {
         phone,
         "FloodGuard: alerts on for "
             + name
-            + ". Reply STOP to leave. Forecast only; follow REMA advice.");
+            + ". Opt out at "
+            + publicBaseUrl
+            + ". Forecast only; follow REMA advice.");
     return Map.of(
         "sectorId", sectorId, "registered", true, "deliveryMode", smsEnabled ? "live" : "disabled");
   }
 
   public void unsubscribe(String phone) {
     alertRepository.unsubscribe(hash(phone));
+  }
+
+  public void unsubscribe(String sectorId, String phone) {
+    if (sectorId == null || phone == null || !phone.matches("\\+[1-9][0-9]{7,14}")) {
+      throw new org.springframework.web.server.ResponseStatusException(
+          org.springframework.http.HttpStatus.BAD_REQUEST, "Sector and international phone required");
+    }
+    alertRepository.unsubscribe(sectorId, hash(phone));
   }
 
   public void updateStatus(String providerSid, String status) {
@@ -125,6 +140,7 @@ public class AlertService {
         }
       }
       alertRepository.updateSentCount(alertId, count);
+      browserPush.sendHighRisk(sectorId, sectorName, message);
     } else if ("MODERATE".equals(level) && "LOW".equals(previous)) {
       alertRepository.createEvent(sectorId, assessmentId, level, "Moderate risk advisory");
       email(

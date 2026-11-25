@@ -42,6 +42,8 @@ floodguard:
   twilio-auth-token: ${TWILIO_AUTH_TOKEN:}
   twilio-from: ${TWILIO_FROM:}
   public-base-url: ${PUBLIC_BASE_URL:}
+  vapid-public-key: ${VAPID_PUBLIC_KEY:}
+  vapid-private-key: ${VAPID_PRIVATE_KEY:}
   officer-email: ${OFFICER_EMAIL:}
   admin-email: ${ADMIN_EMAIL:}
   smtp-from: ${SMTP_FROM:}

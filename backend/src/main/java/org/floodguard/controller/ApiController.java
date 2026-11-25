@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.floodguard.model.OfficerAccount;
+import org.floodguard.dto.PushRegistration;
 import org.floodguard.model.Sector;
 import org.floodguard.repository.OfficerAccountRepository;
 import org.floodguard.repository.PublicDataRepository;
@@ -16,6 +17,7 @@ import org.floodguard.repository.SectorRepository;
 import org.floodguard.repository.SubscriptionRepository;
 import org.floodguard.service.AlertService;
 import org.floodguard.service.BacktestService;
+import org.floodguard.service.BrowserPushService;
 import org.floodguard.service.GeoImporter;
 import org.floodguard.service.IngestionService;
 import org.floodguard.service.RiskModel;
@@ -23,6 +25,7 @@ import org.floodguard.service.TwilioWebhookVerifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -47,6 +50,7 @@ public class ApiController {
   private final OfficerAccountRepository accounts;
   private final RiskModel riskModel;
   private final SubscriptionRepository subscriptions;
+  private final BrowserPushService browserPush;
 
   @GetMapping("/sectors")
   public List<Map<String, Object>> sectors() {
@@ -88,6 +92,32 @@ public class ApiController {
   @ResponseStatus(HttpStatus.CREATED)
   public Map<String, Object> register(@RequestBody Map<String, String> body) {
     return alerts.register(body.get("sectorId"), body.get("phone"));
+  }
+
+  @PostMapping("/subscriptions/unsubscribe")
+  public Map<String, Object> unsubscribe(@RequestBody Map<String, String> body) {
+    alerts.unsubscribe(body.get("sectorId"), body.get("phone"));
+    return Map.of("unsubscribed", true);
+  }
+
+  @GetMapping("/notifications/config")
+  public Map<String, Object> notificationConfiguration() {
+    Map<String, Object> configuration = new LinkedHashMap<>(browserPush.configuration());
+    configuration.put("smsEnabled", alerts.isSmsEnabled());
+    return configuration;
+  }
+
+  @PostMapping("/push/subscriptions")
+  @ResponseStatus(HttpStatus.CREATED)
+  public Map<String, Object> subscribeBrowser(@RequestBody PushRegistration registration) {
+    browserPush.subscribe(registration);
+    return Map.of("subscribed", true);
+  }
+
+  @DeleteMapping("/push/subscriptions")
+  public Map<String, Object> unsubscribeBrowser(@RequestBody Map<String, String> body) {
+    browserPush.unsubscribe(body.get("endpoint"));
+    return Map.of("unsubscribed", true);
   }
 
   @PostMapping(value = "/twilio/inbound", produces = MediaType.APPLICATION_XML_VALUE)

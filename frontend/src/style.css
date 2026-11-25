@@ -448,24 +448,6 @@ select:focus {
   color: #102a40;
   margin: 0.9rem 0 0.2rem;
 }
-.safety {
-  background: #e9e5d8;
-  border-top: 1px solid #aab0a5;
-  min-height: 42px;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.6rem 1.3rem;
-  font-size: 0.76rem;
-  font-weight: 600;
-}
-.safety svg {
-  flex: none;
-}
-.safety span {
-  margin-left: auto;
-  font-weight: 400;
-}
 .subpage {
   width: min(1120px, 100%);
   margin: 0 auto;
@@ -867,12 +849,6 @@ select:focus {
   .signup {
     grid-template-columns: 1fr;
     gap: 0.8rem;
-  }
-  .safety {
-    align-items: flex-start;
-  }
-  .safety span {
-    display: none;
   }
   .alert-row {
     grid-template-columns: 90px 1fr;

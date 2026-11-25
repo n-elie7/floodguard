@@ -11,12 +11,9 @@ import {
   Layers3,
   MapPinned,
   RefreshCw,
-  ShieldAlert,
   X,
 } from "lucide-react";
 
-const DISCLAIMER =
-  "Forecast-based guidance. Follow official Rwanda Emergency Management Agency advice.";
 const colors = {
   HIGH: "#cf584f",
   MODERATE: "#e2ad4c",
@@ -481,10 +478,6 @@ function Officer({
           </div>
         </main>
       )}
-      <footer className="safety">
-        <ShieldAlert size={18} />
-        {DISCLAIMER}
-      </footer>
     </div>
   );
 }
@@ -1025,11 +1018,11 @@ function Public({ sectors, selected, setSelected, forecast }) {
         <section className="signup">
           <div>
             <Bell size={23} />
-            <h2>Get SMS warnings</h2>
+            <h2>SMS warnings</h2>
             <p>
               {notificationConfig?.smsEnabled
                 ? "Register for High risk SMS alerts in your sector. You can stop alerts here at any time."
-                : "SMS delivery is unavailable in this installation. Use the free browser alerts above."}
+                : "SMS alerts are not included in this MVP because delivery requires a paid service. For now, enable the free browser alerts above to receive warnings."}
             </p>
           </div>
           {notificationConfig?.smsEnabled && (
@@ -1046,7 +1039,7 @@ function Public({ sectors, selected, setSelected, forecast }) {
                   setState(
                     result.deliveryMode === "live"
                       ? "Registered. Check your phone for a confirmation SMS."
-                      : "Registered, but SMS delivery is disabled in this installation.",
+                      : "Registered, but SMS alerts are not included in this MVP.",
                   );
                 } catch (ex) {
                   setState(
@@ -1094,11 +1087,6 @@ function Public({ sectors, selected, setSelected, forecast }) {
           )}
         </section>
       </main>
-      <footer className="safety">
-        <ShieldAlert size={18} />
-        {DISCLAIMER}
-        <span>Risk index is experimental and not a flood probability.</span>
-      </footer>
     </div>
   );
 }

@@ -79,7 +79,7 @@ On macOS, run `open /tmp/floodguard-caddy-root.crt` and use Keychain Access to i
 
 Sign in on the officer page with `ADMIN_USERNAME` and `ADMIN_PASSWORD` from `.env`. On a new database, FloodGuard requires you to set a new officer password of at least 14 characters. Save that new password. The original value in `.env` will not replace it on later starts.
 
-Facilitators should request demo credentials privately from the project owner. This public README does not publish administrator passwords.
+For the private facilitator demo, sign in at [the officer dashboard](https://dex47dljon83v.cloudfront.net/operator) with username `admin` and password `UYmnm5VIi6jM4WZRxXQozxeYS8_rwO1RWhb40p5E`. Do not make this repository public while these credentials are in the README.
 
 The worker imports Kigali sector boundaries when the database is empty, then fetches weather data and scores sectors. It starts its first cycle shortly after startup and repeats about once an hour. Refresh the citizen page and select a sector. A current assessment shows its risk band, score, and update time. Assessments older than three hours appear as outdated.
 
@@ -162,7 +162,7 @@ The import may take time because it downloads the Rwanda road extract. Imported 
 
 SMS and officer email are optional integrations. Their settings live in `compose.integrations.yaml`, which you can add with `docker compose -f compose.yaml -f compose.integrations.yaml up -d --build` after configuring the corresponding variables in a private `.env`. SMS requires a suitable Twilio sender and a consented delivery test. Browser alerts do not need these paid services.
 
-Prometheus and Grafana are optional. To run them locally, add a strong `GRAFANA_ADMIN_PASSWORD` to `.env` and run `docker compose --profile monitoring up -d`; then open [https://localhost/grafana/](https://localhost/grafana/). The AWS demonstration server runs both monitoring containers; its Grafana sign-in is at [https://dex47dljon83v.cloudfront.net/grafana/](https://dex47dljon83v.cloudfront.net/grafana/).
+Prometheus and Grafana are optional. To run them locally, add a strong `GRAFANA_ADMIN_PASSWORD` to `.env` and run `docker compose --profile monitoring up -d`; then open [https://localhost/grafana/](https://localhost/grafana/). The AWS demonstration server runs both monitoring containers; its Grafana sign-in is at [https://dex47dljon83v.cloudfront.net/grafana/login](https://dex47dljon83v.cloudfront.net/grafana/login). For the private facilitator demo, the Grafana username is `admin` and the password is `RvRELwyRgY52VAhgFexJiWcTDk-KBrbqQICwJQ`. Do not make this repository public while these credentials are present.
 
 For a public deployment, use the [deployment guide](docs/deployment.md). For application behavior and API details, see the [citizen guide](docs/citizen-guide.md), [officer guide](docs/officer-guide.md), [architecture](docs/architecture.md), and [OpenAPI reference](docs/openapi.yaml).
 

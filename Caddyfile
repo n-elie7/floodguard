@@ -1,0 +1,16 @@
+{$PUBLIC_DOMAIN} {
+  tls {
+    protocols tls1.2 tls1.3
+  }
+  encode zstd gzip
+  @backend path /api/* /ws/*
+  handle /grafana/* {
+    reverse_proxy grafana:3000
+  }
+  handle @backend {
+    reverse_proxy backend:8080
+  }
+  handle {
+    reverse_proxy frontend:80
+  }
+}

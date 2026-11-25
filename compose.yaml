@@ -23,20 +23,8 @@ services:
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
       PHONE_ENCRYPTION_KEY: ${PHONE_ENCRYPTION_KEY:?Set PHONE_ENCRYPTION_KEY in .env}
-      SMS_ENABLED: ${SMS_ENABLED:-false}
-      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
-      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
-      TWILIO_FROM: ${TWILIO_FROM:-}
-      PUBLIC_BASE_URL: https://${PUBLIC_DOMAIN:-localhost}
-      SMTP_HOST: ${SMTP_HOST:-localhost}
-      SMTP_PORT: ${SMTP_PORT:-1025}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      SMTP_AUTH: ${SMTP_AUTH:-false}
-      SMTP_STARTTLS_ENABLE: ${SMTP_STARTTLS_ENABLE:-false}
-      SMTP_FROM: ${SMTP_FROM:-}
-      OFFICER_EMAIL: ${OFFICER_EMAIL:-}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       ROAD_VULNERABILITY_THRESHOLD: ${ROAD_VULNERABILITY_THRESHOLD:-0.6}
     depends_on:
       db: { condition: service_healthy }
@@ -57,20 +45,8 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
       PHONE_ENCRYPTION_KEY: ${PHONE_ENCRYPTION_KEY:?Set PHONE_ENCRYPTION_KEY in .env}
       WORKER_ENABLED: "true"
-      SMS_ENABLED: ${SMS_ENABLED:-false}
-      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
-      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
-      TWILIO_FROM: ${TWILIO_FROM:-}
-      PUBLIC_BASE_URL: https://${PUBLIC_DOMAIN:-localhost}
-      SMTP_HOST: ${SMTP_HOST:-localhost}
-      SMTP_PORT: ${SMTP_PORT:-1025}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      SMTP_AUTH: ${SMTP_AUTH:-false}
-      SMTP_STARTTLS_ENABLE: ${SMTP_STARTTLS_ENABLE:-false}
-      SMTP_FROM: ${SMTP_FROM:-}
-      OFFICER_EMAIL: ${OFFICER_EMAIL:-}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       ROAD_VULNERABILITY_THRESHOLD: ${ROAD_VULNERABILITY_THRESHOLD:-0.6}
     depends_on:
       db: { condition: service_healthy }
@@ -103,6 +79,7 @@ services:
     depends_on: [frontend, backend]
     restart: unless-stopped
   prometheus:
+    profiles: [monitoring]
     image: prom/prometheus:v3.6.0
     volumes:
       [
@@ -112,6 +89,7 @@ services:
     depends_on: [backend]
     restart: unless-stopped
   grafana:
+    profiles: [monitoring]
     image: grafana/grafana:12.2.0
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}

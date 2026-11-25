@@ -1,0 +1,7 @@
+services:
+  caddy:
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:?Set PUBLIC_DOMAIN to a public hostname}
+  grafana:
+    environment:
+      GF_SERVER_ROOT_URL: ${PUBLIC_BASE_URL:-https://${PUBLIC_DOMAIN:?Set PUBLIC_DOMAIN to a public hostname}}/grafana/
